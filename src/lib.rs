@@ -1,3 +1,5 @@
+//! AI3 support library: tensor engine, ESP compatibility, and mining task execution for PoT-O.
+
 pub mod esp_compat;
 pub mod mining;
 pub mod operations;
@@ -12,19 +14,24 @@ use pot_o_core::TribeResult;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-/// Main AI3 Engine -- coordinates tensor operations and mining tasks.
-/// Ported from .AI3 ai3-lib with PoT-O extensions.
+/// Main AI3 engine: coordinates tensor operations and mining tasks (Ported from .AI3 ai3-lib with PoT-O extensions).
 pub struct AI3Engine {
+    /// Distributor for mining tasks.
     pub task_distributor: TaskDistributor,
     performance_stats: Arc<Mutex<EngineStats>>,
     config: EngineConfig,
 }
 
+/// Configuration for the AI3 engine.
 #[derive(Debug, Clone)]
 pub struct EngineConfig {
+    /// Maximum concurrent tasks.
     pub max_concurrent_tasks: usize,
+    /// Per-task timeout.
     pub task_timeout: Duration,
+    /// Whether to enable ESP-sized tensor clamping.
     pub enable_esp_support: bool,
+    /// Whether to auto-optimize tensor dimensions.
     pub auto_optimize_tensors: bool,
 }
 
@@ -62,6 +69,14 @@ impl Default for EngineStats {
     }
 }
 
+/// Abstraction over the tensor execution engine so callers can depend on a trait
+/// (e.g. for testing or alternate backends) instead of a concrete struct.
+pub trait TensorEngine: Send + Sync {
+    fn execute_task(&self, task: &MiningTask) -> TribeResult<Tensor>;
+    fn get_stats(&self) -> EngineStats;
+    fn record_result(&self, success: bool, duration: Duration);
+}
+
 impl AI3Engine {
     pub fn new() -> Self {
         Self::with_config(EngineConfig::default())
@@ -93,6 +108,7 @@ impl AI3Engine {
         }
     }
 
+    /// Returns current engine statistics.
     pub fn get_stats(&self) -> EngineStats {
         self.performance_stats
             .lock()
@@ -100,6 +116,7 @@ impl AI3Engine {
             .unwrap_or_default()
     }
 
+    /// Records a task result for statistics.
     pub fn record_result(&self, success: bool, duration: Duration) {
         if let Ok(mut stats) = self.performance_stats.lock() {
             stats.total_tasks_processed += 1;
@@ -114,6 +131,20 @@ impl AI3Engine {
                     stats.total_compute_time / stats.total_tasks_processed as u32;
             }
         }
+    }
+}
+
+impl TensorEngine for AI3Engine {
+    fn execute_task(&self, task: &MiningTask) -> TribeResult<Tensor> {
+        <AI3Engine>::execute_task(self, task)
+    }
+
+    fn get_stats(&self) -> EngineStats {
+        <AI3Engine>::get_stats(self)
+    }
+
+    fn record_result(&self, success: bool, duration: Duration) {
+        <AI3Engine>::record_result(self, success, duration)
     }
 }
 
